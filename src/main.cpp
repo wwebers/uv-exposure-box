@@ -25,13 +25,11 @@ U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0);
 
 int timerValue = 0;
 Timer t;
-bool underExposure = false;
+bool exposing = false;
 int countEvent, exposureEvent;
 char buffer[6];
-int counter;
 static int encoderPos = ENCODER_START;
 ClickEncoder encoder(ENCODER_PIN_A, ENCODER_PIN_B, BUTTON_PIN);
-
 
 void timerIsr() {
   encoder.service();
@@ -59,7 +57,7 @@ void setup() {
 void loop() {
   t.update();
 
-  if(!underExposure) {
+  if(!exposing) {
     encoderPos += (encoder.getValue() * 10);
 
     timerValue = map(encoderPos, ENCODER_MIN, ENCODER_MAX, TIMER_MIN, TIMER_MAX);
@@ -85,22 +83,32 @@ void displayTimer(int val) {
 }
 
 void startExposure() {
+  exposing = true;
   detachInterrupt(digitalPinToInterrupt(BUTTON_PIN));
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), stopExposure, FALLING);
+  Timer1.detachInterrupt();
   digitalWrite(SWITCH_PIN, HIGH);
-  underExposure = true;
   exposureEvent = t.after(timerValue * 1000L, stopExposure);
   countEvent = t.every(1000L, countDown);
 }
 
 void stopExposure() {
   digitalWrite(SWITCH_PIN, LOW);
-  underExposure = false;
+  detachInterrupt(digitalPinToInterrupt(BUTTON_PIN));
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), startExposure, FALLING);
+  Timer1.attachInterrupt(timerIsr);
   t.stop(countEvent);
   t.stop(exposureEvent);
+  exposing = false;
 }
 
 void countDown() {
-  timerValue--;
-  displayTimer(timerValue);
+  if(timerValue > 0) {
+    timerValue--;
+    displayTimer(timerValue);
+  }
+  else
+  {
+      stopExposure();
+  }
 }
